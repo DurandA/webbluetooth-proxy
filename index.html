@@ -3,13 +3,29 @@
   <head>
     <meta charset=utf-8>
     <title>Web Bluetooth Proxy</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/3.0.3/normalize.css">
+    <link rel="stylesheet" href="//cdn.rawgit.com/milligram/milligram/master/dist/milligram.min.css">
+    <link rel="stylesheet" href="styles/main.css">
   </head>
   <body>
-    <p>Web Bluetooth Proxy</p>
-    <button type="button" id="ble-scan">Click Me!</button> 
-    <table id="device-table">
-      <tr><th>Name</th><th>Address</th><th>Connect</th><th>Connected</th></tr>
-    </table>
+    <header class="header">
+      <section class="container">
+        <h1>Web Bluetooth Proxy</h1>
+        <button type="button" id="ble-scan" class="button-large">Connect</button>
+      </section>
+    </header>
+    <section class="container">
+      <table id="device-table">
+        <tr><th>Name</th><th>Address</th><th>Connect</th><th>Connected</th></tr>
+      </table>
+    </section>
+    <section class="container" id="device">
+    </section>
+    <section class="container">
+      <p>Coded with ♥ by<a href="http://github.com/DurandA" title="Arnaud Durand" target="_blank"> Arnaud Durand</a>.
+      </p>
+    </section>
     <script src="js/app.js"></script>
   </body>
 </html>
