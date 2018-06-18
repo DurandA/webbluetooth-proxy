@@ -1,5 +1,28 @@
-button = document.getElementById("ble-scan");
+bleBtn = document.getElementById("ble-scan");
+mqttBtn = document.getElementById("mqtt-connect");
 deviceTable = document.getElementById("device-table");
+
+var Buffer = Buffer.Buffer;
+var client = undefined;
+
+mqttBtn.addEventListener('click', function() {
+  if (client && client.connected) {
+    mqttBtn.enabled = false;
+    client.end(false, () => {
+      mqttBtn.enabled = true;
+      mqttBtn.value = 'Connect';
+    });
+  }
+  else {
+    client = mqtt.connect('ws://mqtt.thing.zone')
+    mqttBtn.enabled = false;
+    client.on('connect', () => {
+      console.log('Connected to MQTT server!')
+      mqttBtn.enabled = true;
+      mqttBtn.value = 'Disconnect';
+    });
+  }
+});
 
 function createSwitch(root){
   let label = Object.assign(document.createElement("label"), {className:'switch'});
@@ -56,7 +79,7 @@ function createDeviceElement(deviceId, characteristics){
   return container;
 }
 
-button.addEventListener('pointerup', function(event) {
+bleBtn.addEventListener('pointerup', function(event) {
   navigator.bluetooth.requestDevice({
     filters: [{ services: ['ef680100-9b35-4933-9b10-52ffa9740042'] }],
     //acceptAllDevices: true,
@@ -124,11 +147,14 @@ function handleCharacteristic(characteristic) {
   .then(characteristic => {
     characteristic.addEventListener('characteristicvaluechanged', e => {
       const view = e.target.value;
+      if (client.connected) {
+        const deviceUri = escape(characteristic.service.device.id);
+        client.publish(deviceUri + '/' + characteristic.service.uuid + '/' + characteristic.uuid, Buffer.from(view.buffer));
+      }
     });
   });
 }
 
-// https://www.w3schools.com/howto/howto_js_tabs.asp
 function openDevice(deviceId, evt) {
     var i, tabcontent, tablinks;
 
@@ -150,4 +176,11 @@ function openDevice(deviceId, evt) {
       container.style.display = "block";
     }
     evt.currentTarget.classList.remove("button-outline");
+}
+
+// https://github.com/joaquimserafim/base64-url
+function escape (str) {
+  return str.replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
 }
