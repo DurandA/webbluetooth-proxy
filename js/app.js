@@ -1,6 +1,6 @@
 bleBtn = document.getElementById("ble-scan");
 mqttBtn = document.getElementById("mqtt-connect");
-deviceTable = document.getElementById("device-table");
+deviceGrid = document.getElementById("device-grid");
 
 var Buffer = Buffer.Buffer;
 var client = undefined;
@@ -36,11 +36,8 @@ function createSwitch(root){
   return input
 }
 
-function createDeviceElement(deviceId, characteristics){
-  let container = Object.assign(document.createElement("div"), {className:'tabcontent'});
-  container.id = 'dev-'+deviceId;
+function createDeviceElement(characteristics){
   let sUl = document.createElement("UL");
-  container.appendChild(sUl);
   for (var service in characteristics) {
     let sLi = document.createElement("LI");
     sLi.appendChild(document.createTextNode(service));
@@ -76,7 +73,7 @@ function createDeviceElement(deviceId, characteristics){
       cUl.appendChild(cLi);
     });
   }
-  return container;
+  return sUl;
 }
 
 bleBtn.addEventListener('pointerup', function(event) {
@@ -89,35 +86,50 @@ bleBtn.addEventListener('pointerup', function(event) {
     ]
   }).then(device => {
     console.log(device);
-    let row = deviceTable.insertRow(-1);
-    let name = row.insertCell(0);
-    let tab = Object.assign(document.createElement("button"), {id:device.id, className:'tablinks button-outline'});
-    tab.appendChild(document.createTextNode(device.name));
-    tab.onclick = openDevice.bind(null, device.id)
-    let id = row.insertCell(1);
 
-    name.appendChild(tab);
-    id.innerHTML = device.id;
+    let row = Object.assign(document.createElement("div"), {className:'row'});
+    deviceGrid.appendChild(row);
 
-    let connect = createSwitch(row.insertCell(2))
+    let name = Object.assign(document.createElement("div"), {className:'column'});
+    let deviceBtn = Object.assign(document.createElement("button"), {id:device.id, className:'button'});
+    deviceBtn.appendChild(document.createTextNode(device.name));
+    deviceBtn.onclick = collapseDevice.bind(row);
+    name.appendChild(deviceBtn);
+    row.appendChild(name);
 
-    let connected = row.insertCell(3);
-    connected.innerHTML = device.gatt.connected;
+    let id = Object.assign(document.createElement("div"), {className:'column'});
+    id.appendChild(document.createTextNode(device.id));
+    row.appendChild(id);
 
-    connect.onclick = function(){
-      connect.disabled = true;
-      if (connect.checked) {
+    let connect = Object.assign(document.createElement("div"), {className:'column'});
+    let connectBtn = createSwitch(connect);
+    row.appendChild(connect);
+
+    let connected = Object.assign(document.createElement("div"), {className:'column'});
+    connected.appendChild(document.createTextNode(device.gatt.connected));
+    row.appendChild(connected);
+
+    let panel = Object.assign(document.createElement("div"), {className:'row panel'});
+    deviceGrid.appendChild(panel)
+
+    connectBtn.onclick = function(){
+      connectBtn.disabled = true;
+      if (connectBtn.checked) {
         device.gatt.connect().then(server => {
           getCharacteristics(device).then(characteristics => {
-            document.getElementById('device').appendChild(createDeviceElement(device.id, characteristics));
+            panel.appendChild(createDeviceElement(characteristics));
+          }).catch(error => {
+            connected.appendChild(document.createTextNode(error));
           });
           connected.innerHTML = device.gatt.connected;
-          connect.disabled = false;
+          connectBtn.disabled = false;
+        }).catch(error => {
+          connected.appendChild(document.createTextNode(error));
         });
       } else {
         device.gatt.disconnect();
         connected.innerHTML = device.gatt.connected;
-        connect.disabled = false;
+        connectBtn.disabled = false;
       }
     };
   }); 
@@ -155,27 +167,16 @@ function handleCharacteristic(characteristic) {
   });
 }
 
-function openDevice(deviceId, evt) {
-    var i, tabcontent, tablinks;
+function collapseDevice(evt) {
+  evt.currentTarget.classList.toggle("button-outline");
 
-    // Get all elements with class="tabcontent" and hide them
-    tabcontent = document.getElementsByClassName("tabcontent");
-    for (i = 0; i < tabcontent.length; i++) {
-        tabcontent[i].style.display = "none";
-    }
-
-    // Get all elements with class="tablinks" and remove the class "active"
-    tablinks = document.getElementsByClassName("tablinks");
-    for (i = 0; i < tablinks.length; i++) {
-        tablinks[i].classList.add("button-outline");
-    }
-
-    // Show the current tab, and add an "active" class to the button that opened the tab
-    let container = document.getElementById('dev-'+deviceId);
-    if (container) {
-      container.style.display = "block";
-    }
-    evt.currentTarget.classList.remove("button-outline");
+  /* Toggle between hiding and showing the active panel */
+  let panel = this.nextElementSibling;
+  if (panel.style.display === "block") {
+    panel.style.display = "none";
+  } else {
+    panel.style.display = "block";
+  }
 }
 
 // https://github.com/joaquimserafim/base64-url

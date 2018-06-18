@@ -22,13 +22,16 @@
     <header class="header">
       <section class="container">
         <h1>Web Bluetooth Proxy</h1>
-        <button type="button" id="ble-scan" class="button-large">Connect</button>
+        <button type="button" id="ble-scan" class="button-large">Pair</button>
       </section>
     </header>
-    <section class="container">
-      <table id="device-table">
-        <tr><th>Name</th><th>Address</th><th>Connect</th><th>Connected</th></tr>
-      </table>
+    <section id="device-grid" class="container">
+      <div class="row row-head">
+        <div class="column">Name</div>
+        <div class="column">Address</div>
+        <div class="column">Connect</div>
+        <div class="column">Connected</div>
+      </div>
     </section>
     <section class="container" id="device">
     </section>
