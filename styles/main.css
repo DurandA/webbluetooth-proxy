@@ -220,3 +220,86 @@ input:checked + .slider:before {
 .slider.round:before {
     border-radius: 50%;
 }
+
+.row.row-head {
+    border-bottom: 0.1rem solid #e1e1e1;
+    padding: 1.2rem 1.5rem;
+    text-align: left;
+    font-weight: bold;
+}
+
+.device {
+    border-top: 0.1rem solid #e1e1e1;
+    padding: 1.2rem 1.5rem;
+    text-align: left;
+}
+
+.device:first-of-type {
+    border-top: none;
+}
+
+.device.connected:hover {
+    cursor: pointer;
+    background-color: #d4e9fe;
+}
+
+.device.connected * .arrow {
+    display: block;
+}
+
+.arrow {
+    width: 42px;
+    height: 42px;
+    font-size: 32px;
+    display: none;
+}
+
+.collapsible {
+    display: none;
+    overflow: hidden;
+}
+
+.service {
+    padding: 0 18px;
+    background-color: white;
+    display: none;
+    overflow: hidden;
+}
+
+.device.connected + .panel {
+    /*display: block;*/
+}
+
+.device.connected:not(.collapsed) + .service {
+    display: block;
+}
+
+.mqtt-form {
+    float: right;
+}
+
+#mqtt-url {
+    background-color: white;
+  width: 25rem;
+}
+
+@media only screen and (max-width: 40rem) {
+    .mqtt-form {
+        float: none;
+        margin: auto;
+        width: 100%;
+        max-width: 40rem;
+    }
+
+    #mqtt-url {
+        width: 60%;
+    }
+
+    .navigation{
+        height:10.2rem;
+    }
+
+    .header{
+        padding-top: 10rem;
+    }
+}
