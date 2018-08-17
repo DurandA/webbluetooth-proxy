@@ -5,6 +5,7 @@ deviceGrid = document.getElementById("device-grid");
 var Buffer = Buffer.Buffer;
 var client = undefined;
 
+var deviceMap = {}
 
 mqttBtn.addEventListener('click', function() {
   if (client && client.connected) {
@@ -21,10 +22,36 @@ mqttBtn.addEventListener('click', function() {
       console.log('Connected to MQTT server!')
       mqttBtn.enabled = true;
       mqttBtn.value = 'Disconnect';
+      for (var deviceUri in deviceMap) {
+        const topic = deviceUri+'/+/+'
+        client.subscribe([`${topic}/read`, `${topic}/write`])
+      }
     });
+    client.on('message', onMessage);
   }
 });
 
+function onMessage(topic, message) {
+  // message is Buffer
+  let deviceUri, serviceUUID, characteristicUUID, action;
+  [deviceUri, serviceUUID, characteristicUUID, action] = topic.split('/');
+  let device = deviceMap[deviceUri];
+  if (!device.gatt.connected)
+    return;
+  device.gatt.getPrimaryService(serviceUUID)
+  .then(service => service.getCharacteristic(characteristicUUID))
+  .then(characteristic => {
+    if (action == 'write') {
+      return characteristic.writeValue(message);
+    }
+    else if (action == 'read')
+      return characteristic.readValue().then(value => {
+        if (client.connected)
+          client.publish(`${deviceUri}/${serviceUUID}/${characteristicUUID}`, Buffer.from(value.buffer));
+      })
+  })
+  .catch(error => { console.log(error); });
+}
 
 function createSwitch(root){
   let label = Object.assign(document.createElement("label"), {className:'switch'});
@@ -89,6 +116,7 @@ bleBtn.addEventListener('pointerup', function(event) {
   }).then(device => {
     console.log(device);
     const deviceUri = escape(device.id);
+    deviceMap[deviceUri] = device;
 
     let deviceRow = Object.assign(document.createElement("div"), {className:'row device'});
     deviceGrid.appendChild(deviceRow);
@@ -120,6 +148,7 @@ bleBtn.addEventListener('pointerup', function(event) {
 
     connectBtn.onclick = function(){
       connectBtn.disabled = true;
+      let topic = deviceUri+'/+/+'
       if (connectBtn.checked) {
         device.gatt.connect().then(server => {
           getCharacteristics(device).then(characteristics => {
@@ -130,6 +159,7 @@ bleBtn.addEventListener('pointerup', function(event) {
           deviceRow.classList.add("connected");
           if (client && client.connected) {
             client.publish(deviceUri + '/connected', "true");
+            client.subscribe([`${topic}/read`, `${topic}/write`])
           }
           connectBtn.disabled = false;
         }).catch(error => {
@@ -140,6 +170,7 @@ bleBtn.addEventListener('pointerup', function(event) {
         deviceRow.classList.remove("connected");
         if (client && client.connected) {
           client.publish(deviceUri + '/connected', "false");
+          client.unsubscribe([`${topic}/read`, `${topic}/write`])
         }
         connectBtn.disabled = false;
       }
