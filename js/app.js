@@ -5,6 +5,7 @@ deviceGrid = document.getElementById("device-grid");
 var Buffer = Buffer.Buffer;
 var client = undefined;
 
+
 mqttBtn.addEventListener('click', function() {
   if (client && client.connected) {
     mqttBtn.enabled = false;
@@ -23,6 +24,7 @@ mqttBtn.addEventListener('click', function() {
     });
   }
 });
+
 
 function createSwitch(root){
   let label = Object.assign(document.createElement("label"), {className:'switch'});
@@ -64,7 +66,7 @@ function createDeviceElement(characteristics){
 
       input = Object.assign(document.createElement("input"),{
         type:'checkbox', checked:false, disabled:!characteristic.properties.notify});
-      input.onclick = handleCharacteristic.bind(null, characteristic)
+      input.onclick = handleCharacteristic.bind(input, characteristic);
       label = Object.assign(document.createElement("label"), {className:'label-inline'});
       label.appendChild(input);
       label.appendChild(document.createTextNode("notify"));
@@ -86,49 +88,59 @@ bleBtn.addEventListener('pointerup', function(event) {
     ]
   }).then(device => {
     console.log(device);
+    const deviceUri = escape(device.id);
 
-    let row = Object.assign(document.createElement("div"), {className:'row'});
-    deviceGrid.appendChild(row);
+    let deviceRow = Object.assign(document.createElement("div"), {className:'row device'});
+    deviceGrid.appendChild(deviceRow);
 
-    let name = Object.assign(document.createElement("div"), {className:'column'});
-    let deviceBtn = Object.assign(document.createElement("button"), {id:device.id, className:'button'});
-    deviceBtn.appendChild(document.createTextNode(device.name));
-    deviceBtn.onclick = collapseDevice.bind(row);
-    name.appendChild(deviceBtn);
-    row.appendChild(name);
+    let identifier = Object.assign(document.createElement("div"), {className:'column column-50'});
+    let s = Object.assign(document.createElement("strong"), {style:'padding-right: 1.5em;'});
+    let name = document.createTextNode(device.name);
+    s.appendChild(name);
+    identifier.appendChild(s);
+    identifier.appendChild(document.createTextNode(escape(device.id)));
+    deviceRow.appendChild(identifier);
 
-    let id = Object.assign(document.createElement("div"), {className:'column'});
-    id.appendChild(document.createTextNode(device.id));
-    row.appendChild(id);
-
-    let connect = Object.assign(document.createElement("div"), {className:'column'});
+    let connect = Object.assign(document.createElement("div"), {className:'column column-10'});
     let connectBtn = createSwitch(connect);
-    row.appendChild(connect);
+    deviceRow.appendChild(connect);
 
-    let connected = Object.assign(document.createElement("div"), {className:'column'});
-    connected.appendChild(document.createTextNode(device.gatt.connected));
-    row.appendChild(connected);
+    let errors = Object.assign(document.createElement("div"), {className:'column column-30'});
+    deviceRow.appendChild(errors);
 
-    let panel = Object.assign(document.createElement("div"), {className:'row panel'});
-    deviceGrid.appendChild(panel)
+    let collapse = Object.assign(document.createElement("div"), {className:'column column-10'});
+    let arrow = Object.assign(document.createElement("ion-icon"), {className:'arrow', name:'ios-arrow-forward'});
+    collapse.appendChild(arrow);
+    deviceRow.appendChild(collapse);
+
+    deviceRow.addEventListener("click", collapseDevice.bind(deviceRow, arrow));
+
+    let serviceRow = Object.assign(document.createElement("div"), {className:'row service collapsed'});
+    deviceGrid.appendChild(serviceRow)
 
     connectBtn.onclick = function(){
       connectBtn.disabled = true;
       if (connectBtn.checked) {
         device.gatt.connect().then(server => {
           getCharacteristics(device).then(characteristics => {
-            panel.appendChild(createDeviceElement(characteristics));
+            serviceRow.appendChild(createDeviceElement(characteristics));
           }).catch(error => {
-            connected.appendChild(document.createTextNode(error));
+            errors.appendChild(document.createTextNode(error));
           });
-          connected.innerHTML = device.gatt.connected;
+          deviceRow.classList.add("connected");
+          if (client && client.connected) {
+            client.publish(deviceUri + '/connected', "true");
+          }
           connectBtn.disabled = false;
         }).catch(error => {
-          connected.appendChild(document.createTextNode(error));
+          errors.appendChild(document.createTextNode(error));
         });
       } else {
         device.gatt.disconnect();
-        connected.innerHTML = device.gatt.connected;
+        deviceRow.classList.remove("connected");
+        if (client && client.connected) {
+          client.publish(deviceUri + '/connected', "false");
+        }
         connectBtn.disabled = false;
       }
     };
@@ -155,28 +167,28 @@ function getCharacteristics(device){
 }
 
 function handleCharacteristic(characteristic) {
+  if (!this.checked) {
+    return characteristic.stopNotifications();
+  }
   return characteristic.startNotifications()
   .then(characteristic => {
     characteristic.addEventListener('characteristicvaluechanged', e => {
       const view = e.target.value;
-      if (client.connected) {
+      if (client && client.connected) {
         const deviceUri = escape(characteristic.service.device.id);
-        client.publish(deviceUri + '/' + characteristic.service.uuid + '/' + characteristic.uuid, Buffer.from(view.buffer));
+        client.publish(deviceUri + '/' + characteristic.service.uuid +
+                                   '/' + characteristic.uuid, Buffer.from(view.buffer));
       }
     });
   });
 }
 
-function collapseDevice(evt) {
-  evt.currentTarget.classList.toggle("button-outline");
-
+function collapseDevice(_, evt) {
   /* Toggle between hiding and showing the active panel */
-  let panel = this.nextElementSibling;
-  if (panel.style.display === "block") {
-    panel.style.display = "none";
-  } else {
-    panel.style.display = "block";
-  }
+  let serviceRow = this.nextElementSibling;
+  let collapsed = this.classList.toggle("collapsed");
+  let arrow = this.querySelector('.arrow');
+  arrow.name = collapsed ? "ios-arrow-forward" : "ios-arrow-down";
 }
 
 // https://github.com/joaquimserafim/base64-url
