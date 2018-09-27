@@ -15,16 +15,30 @@
     <nav class="navigation">
       <section class="container">
         <a class="navigation-title" href="#"><h1 class="title">Web Bluetooth Proxy</h1></a>
-        <div class="mqtt-form">
-          <input type="text" placeholder="ws://mqtt.thing.zone" id="mqtt-url">
-          <input type="button" id="mqtt-connect" class="button-large" value="Connect">
-        </div>
+        <input type="button" id="connect-modal" class="button-large" value="Connect">
       </section>
     </nav>
     <header class="header">
       <section class="container">
         <h1>Web Bluetooth Proxy</h1>
         <button type="button" id="ble-scan" class="button-large">Pair</button>
+        <dialog id="connect-dialog">
+          <form id="connect-form" method="dialog">
+            <section>
+              <p><label for="broker-url">Broker address :</label>
+              <input type="text" placeholder="ws://mqtt.thing.zone" id="broker-url">
+              <label for="mqttUsername">Login :</label>
+              <input type="text" placeholder="Username" id="username" name="username">
+              <input type="password" placeholder="Password" id="password" name="password">
+              <input type="checkbox" id="anonymous"> anonymous</p>
+            </section>
+            <span class="error" aria-live="polite"></span>
+            <menu>
+              <button id="cancel" type="reset">Cancel</button>
+              <button id="connect" type="submit">Connect</button>
+            </menu>
+          </form>
+        </dialog>
       </section>
     </header>
     <section id="device-grid" class="container">

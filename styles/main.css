@@ -274,32 +274,21 @@ input:checked + .slider:before {
     display: block;
 }
 
-.mqtt-form {
+#connect-modal {
     float: right;
 }
 
-#mqtt-url {
-    background-color: white;
-  width: 25rem;
+input[type='password'][disabled],
+input[type='text'][disabled] {
+    background-color: rgb(235, 235, 228);
 }
 
-@media only screen and (max-width: 40rem) {
-    .mqtt-form {
-        float: none;
-        margin: auto;
-        width: 100%;
-        max-width: 40rem;
-    }
+dialog {
+    border-radius: 0.6rem;
+    box-shadow: 0 0 1em black;
+    border-style: none;
+}
 
-    #mqtt-url {
-        width: 60%;
-    }
-
-    .navigation{
-        height:10.2rem;
-    }
-
-    .header{
-        padding-top: 10rem;
-    }
+.error {
+    color: red;
 }

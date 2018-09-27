@@ -1,34 +1,60 @@
-bleBtn = document.getElementById("ble-scan");
-mqttBtn = document.getElementById("mqtt-connect");
-deviceGrid = document.getElementById("device-grid");
+let bleBtn = document.getElementById("ble-scan");
+let modalBtn = document.getElementById('connect-modal');
+let cancelBtn = document.getElementById('cancel');
+let connectForm = document.getElementById('connect-form');
+let deviceGrid = document.getElementById("device-grid");
 
-var Buffer = Buffer.Buffer;
-var client = undefined;
+Buffer = Buffer.Buffer;
+let client = undefined;
 
-var deviceMap = {}
+let deviceMap = {}
 
-mqttBtn.addEventListener('click', function() {
+modalBtn.addEventListener('click', function() {
   if (client && client.connected) {
-    mqttBtn.enabled = false;
+    modalBtn.enabled = false;
     client.end(false, () => {
-      mqttBtn.enabled = true;
-      mqttBtn.value = 'Connect';
+      modalBtn.enabled = true;
+      modalBtn.value = 'Connect';
     });
   }
   else {
-    client = mqtt.connect('ws://mqtt.thing.zone')
-    mqttBtn.enabled = false;
-    client.on('connect', () => {
-      console.log('Connected to MQTT server!')
-      mqttBtn.enabled = true;
-      mqttBtn.value = 'Disconnect';
-      for (var deviceUri in deviceMap) {
-        const topic = deviceUri+'/+/+'
-        client.subscribe([`${topic}/read`, `${topic}/write`])
-      }
-    });
-    client.on('message', onMessage);
+    document.getElementById('connect-dialog').showModal();
+    document.querySelector('.error').message = '';
   }
+});
+
+document.getElementById('anonymous').addEventListener('change', e => {
+  let checked = e.target.checked;
+  document.getElementById('username').disabled = checked;
+  document.getElementById('password').disabled = checked;
+});
+
+connectForm.addEventListener('submit', e => {
+  e.preventDefault();
+  let opts = new FormData(connectForm[0].form);
+  let url = document.getElementById('broker-url').value;
+  client = mqtt.connect(url, {username: opts.get('username'), password: opts.get('password')});
+  modalBtn.enabled = false;
+  client.on('connect', () => {
+    console.log('Connected to MQTT server!')
+    document.getElementById('connect-dialog').close();
+    modalBtn.enabled = true;
+    modalBtn.value = 'Disconnect';
+    for (var deviceUri in deviceMap) {
+      const topic = deviceUri+'/+/+'
+      client.subscribe([`${topic}/read`, `${topic}/write`])
+    }
+  });
+  client.on('message', onMessage);
+  client.on('error', e => {
+    console.log(e);
+    let error = document.querySelector('.error');
+    error.textContent = e.message;
+  });
+});
+
+cancelBtn.addEventListener('click', function() {
+  document.getElementById('connect-dialog').close();
 });
 
 function onMessage(topic, message) {
