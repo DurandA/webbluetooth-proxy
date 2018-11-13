@@ -40,8 +40,8 @@ connectForm.addEventListener('submit', e => {
     document.getElementById('connect-dialog').close();
     modalBtn.enabled = true;
     modalBtn.value = 'Disconnect';
-    for (var deviceUri in deviceMap) {
-      const topic = deviceUri+'/+/+'
+    for (let deviceUri in deviceMap) {
+      const topic = deviceMap[deviceUri].cloudToken+'/+/+'
       client.subscribe([`${topic}/read`, `${topic}/write`])
     }
   });
@@ -73,7 +73,7 @@ function onMessage(topic, message) {
     else if (action == 'read')
       return characteristic.readValue().then(value => {
         if (client.connected)
-          client.publish(`${deviceUri}/${serviceUUID}/${characteristicUUID}`, Buffer.from(value.buffer));
+          client.publish(`${deviceMap[deviceUri].cloudToken}/${serviceUUID}/${characteristicUUID}`, Buffer.from(value.buffer));
       })
   })
   .catch(error => { console.log(error); });
@@ -176,7 +176,6 @@ bleBtn.addEventListener('pointerup', function(event) {
 
     connectBtn.onclick = function(){
       connectBtn.disabled = true;
-      let topic = deviceUri+'/+/+'
       if (connectBtn.checked) {
         device.gatt.connect().then(server => {
           getCharacteristics(device).then(characteristics => {
@@ -185,15 +184,20 @@ bleBtn.addEventListener('pointerup', function(event) {
             errors.appendChild(document.createTextNode(error));
           });
           deviceRow.classList.add("connected");
-          if (client && client.connected) {
-            client.publish(deviceUri + '/connected', "true");
-            client.subscribe([`${topic}/read`, `${topic}/write`])
-          }
-          connectBtn.disabled = false;
+          getCloudToken(server).then(cloudToken => {
+              deviceMap[deviceUri].cloudToken = cloudToken;
+              let topic = cloudToken + '/+/+';
+              if (client && client.connected) {
+                client.publish(cloudToken + '/connected', "true");
+                client.subscribe([`${topic}/read`, `${topic}/write`])
+              }
+              connectBtn.disabled = false;
+          });
         }).catch(error => {
           errors.appendChild(document.createTextNode(error));
         });
       } else {
+        let topic = deviceMap.deviceUri.cloudToken+'/+/+';
         device.gatt.disconnect();
         deviceRow.classList.remove("connected");
         if (client && client.connected) {
@@ -203,8 +207,40 @@ bleBtn.addEventListener('pointerup', function(event) {
         connectBtn.disabled = false;
       }
     };
-  }); 
+  });
 });
+
+function getCloudToken(server) {
+  return new Promise((resolve, reject) => {
+    let configurationServiceUUID = 'ef680100-9b35-4933-9b10-52ffa9740042';
+    let cloudTokenUUID = 'ef680106-9b35-4933-9b10-52ffa9740042';
+
+    function generateToken() {
+      let digits = 10 ^ 7;
+      let randomNumber = Math.trunc(new Date().getTime() * digits + (Math.random() * digits));
+      return randomNumber.toString(36);
+    }
+
+    server.getPrimaryService(configurationServiceUUID).then(service => {
+      return service.getCharacteristic(cloudTokenUUID);
+    }).then(characteristic => {
+      characteristic.readValue().then(dataView => {
+        let decoder = new TextDecoder("utf-8");
+        let token = decoder.decode(dataView.buffer).toString();
+        if (token === "") {
+          token = generateToken();
+          let encoder = new TextEncoder();
+          let encoded = encoder.encode(token);
+          console.log("Assigning cloud token " + token);
+          characteristic.writeValue(encoded);
+        }
+        console.log("Cloud token: " + token);
+        resolve(token);
+      })
+    }).catch(error => reject("Error while getting cloud token" + error));
+  });
+}
+
 
 function getCharacteristics(device){
   var supportedCharacteristics = {}
@@ -235,7 +271,7 @@ function handleCharacteristic(characteristic) {
       const view = e.target.value;
       if (client && client.connected) {
         const deviceUri = escape(characteristic.service.device.id);
-        client.publish(deviceUri + '/' + characteristic.service.uuid +
+        client.publish(deviceMap[deviceUri].cloudToken + '/' + characteristic.service.uuid +
                                    '/' + characteristic.uuid, Buffer.from(view.buffer));
       }
     });
