@@ -7,7 +7,8 @@ let deviceGrid = document.getElementById("device-grid");
 Buffer = Buffer.Buffer;
 let client = undefined;
 
-let deviceMap = {}
+let deviceMapByDeviceId = {};
+let deviceMapByCloudToken = {};
 
 modalBtn.addEventListener('click', function() {
   if (client && client.connected) {
@@ -40,9 +41,9 @@ connectForm.addEventListener('submit', e => {
     document.getElementById('connect-dialog').close();
     modalBtn.enabled = true;
     modalBtn.value = 'Disconnect';
-    for (let deviceUri in deviceMap) {
-      const topic = deviceMap[deviceUri].cloudToken+'/+/+'
-      client.subscribe([`${topic}/read`, `${topic}/write`])
+    for (let deviceUri in deviceMapByDeviceId) {
+      const topic = deviceMapByDeviceId[deviceUri].cloudToken+'/+/+'
+      client.subscribe([`${topic}/read`, `${topic}/write`]);
     }
   });
   client.on('message', onMessage);
@@ -59,21 +60,22 @@ cancelBtn.addEventListener('click', function() {
 
 function onMessage(topic, message) {
   // message is Buffer
-  let deviceUri, serviceUUID, characteristicUUID, action;
-  [deviceUri, serviceUUID, characteristicUUID, action] = topic.split('/');
-  let device = deviceMap[deviceUri];
+  let cloudToken, serviceUUID, characteristicUUID, action;
+  [cloudToken, serviceUUID, characteristicUUID, action] = topic.split('/');
+  let device = deviceMapByCloudToken[cloudToken];
   if (!device.gatt.connected)
     return;
   device.gatt.getPrimaryService(serviceUUID)
   .then(service => service.getCharacteristic(characteristicUUID))
   .then(characteristic => {
     if (action == 'write') {
+      console.log("Write ");
       return characteristic.writeValue(message);
     }
     else if (action == 'read')
       return characteristic.readValue().then(value => {
         if (client.connected)
-          client.publish(`${deviceMap[deviceUri].cloudToken}/${serviceUUID}/${characteristicUUID}`, Buffer.from(value.buffer));
+          client.publish(`${deviceMapByDeviceId[deviceUri].cloudToken}/${serviceUUID}/${characteristicUUID}`, Buffer.from(value.buffer));
       })
   })
   .catch(error => { console.log(error); });
@@ -144,7 +146,7 @@ bleBtn.addEventListener('pointerup', function(event) {
   }).then(device => {
     console.log(device);
     const deviceUri = escape(device.id);
-    deviceMap[deviceUri] = device;
+    deviceMapByDeviceId[deviceUri] = device;
 
     let deviceRow = Object.assign(document.createElement("div"), {className:'row device'});
     deviceGrid.appendChild(deviceRow);
@@ -185,10 +187,12 @@ bleBtn.addEventListener('pointerup', function(event) {
           });
           deviceRow.classList.add("connected");
           getCloudToken(server).then(cloudToken => {
-              deviceMap[deviceUri].cloudToken = cloudToken;
+              deviceMapByDeviceId[deviceUri].cloudToken = cloudToken;
+              deviceMapByCloudToken[cloudToken] = deviceMapByDeviceId[deviceUri];
               let topic = cloudToken + '/+/+';
               if (client && client.connected) {
                 client.publish(cloudToken + '/connected', "true");
+                console.log("Sent connected event")
                 client.subscribe([`${topic}/read`, `${topic}/write`])
               }
               connectBtn.disabled = false;
@@ -197,7 +201,7 @@ bleBtn.addEventListener('pointerup', function(event) {
           errors.appendChild(document.createTextNode(error));
         });
       } else {
-        let topic = deviceMap.deviceUri.cloudToken+'/+/+';
+        let topic = deviceMapByDeviceId.deviceUri.cloudToken+'/+/+';
         device.gatt.disconnect();
         deviceRow.classList.remove("connected");
         if (client && client.connected) {
@@ -270,8 +274,7 @@ function handleCharacteristic(characteristic) {
     characteristic.addEventListener('characteristicvaluechanged', e => {
       const view = e.target.value;
       if (client && client.connected) {
-        const deviceUri = escape(characteristic.service.device.id);
-        client.publish(deviceMap[deviceUri].cloudToken + '/' + characteristic.service.uuid +
+        client.publish(characteristic.service.device.cloudToken + '/' + characteristic.service.uuid +
                                    '/' + characteristic.uuid, Buffer.from(view.buffer));
       }
     });
