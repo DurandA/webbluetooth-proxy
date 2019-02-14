@@ -7,7 +7,8 @@ let deviceGrid = document.getElementById("device-grid");
 Buffer = Buffer.Buffer;
 let client = undefined;
 
-let deviceMap = {}
+let deviceMapByDeviceId = {};
+let deviceMapByCloudToken = {};
 
 modalBtn.addEventListener('click', function() {
   if (client && client.connected) {
@@ -40,9 +41,9 @@ connectForm.addEventListener('submit', e => {
     document.getElementById('connect-dialog').close();
     modalBtn.enabled = true;
     modalBtn.value = 'Disconnect';
-    for (var deviceUri in deviceMap) {
-      const topic = deviceUri+'/+/+'
-      client.subscribe([`${topic}/read`, `${topic}/write`])
+    for (let deviceUri in deviceMapByDeviceId) {
+      const topic = deviceMapByDeviceId[deviceUri].cloudToken+'/+/+'
+      client.subscribe([`${topic}/read`, `${topic}/write`]);
     }
   });
   client.on('message', onMessage);
@@ -59,21 +60,22 @@ cancelBtn.addEventListener('click', function() {
 
 function onMessage(topic, message) {
   // message is Buffer
-  let deviceUri, serviceUUID, characteristicUUID, action;
-  [deviceUri, serviceUUID, characteristicUUID, action] = topic.split('/');
-  let device = deviceMap[deviceUri];
+  let cloudToken, serviceUUID, characteristicUUID, action;
+  [cloudToken, serviceUUID, characteristicUUID, action] = topic.split('/');
+  let device = deviceMapByCloudToken[cloudToken];
   if (!device.gatt.connected)
     return;
   device.gatt.getPrimaryService(serviceUUID)
   .then(service => service.getCharacteristic(characteristicUUID))
   .then(characteristic => {
     if (action == 'write') {
+      console.log("Write ");
       return characteristic.writeValue(message);
     }
     else if (action == 'read')
       return characteristic.readValue().then(value => {
         if (client.connected)
-          client.publish(`${deviceUri}/${serviceUUID}/${characteristicUUID}`, Buffer.from(value.buffer));
+          client.publish(`${deviceMapByDeviceId[deviceUri].cloudToken}/${serviceUUID}/${characteristicUUID}`, Buffer.from(value.buffer));
       })
   })
   .catch(error => { console.log(error); });
@@ -144,7 +146,7 @@ bleBtn.addEventListener('pointerup', function(event) {
   }).then(device => {
     console.log(device);
     const deviceUri = escape(device.id);
-    deviceMap[deviceUri] = device;
+    deviceMapByDeviceId[deviceUri] = device;
 
     let deviceRow = Object.assign(document.createElement("div"), {className:'row device'});
     deviceGrid.appendChild(deviceRow);
@@ -176,7 +178,6 @@ bleBtn.addEventListener('pointerup', function(event) {
 
     connectBtn.onclick = function(){
       connectBtn.disabled = true;
-      let topic = deviceUri+'/+/+'
       if (connectBtn.checked) {
         device.gatt.connect().then(server => {
           getCharacteristics(device).then(characteristics => {
@@ -185,15 +186,22 @@ bleBtn.addEventListener('pointerup', function(event) {
             errors.appendChild(document.createTextNode(error));
           });
           deviceRow.classList.add("connected");
-          if (client && client.connected) {
-            client.publish(deviceUri + '/connected', "true");
-            client.subscribe([`${topic}/read`, `${topic}/write`])
-          }
-          connectBtn.disabled = false;
+          getCloudToken(server).then(cloudToken => {
+              deviceMapByDeviceId[deviceUri].cloudToken = cloudToken;
+              deviceMapByCloudToken[cloudToken] = deviceMapByDeviceId[deviceUri];
+              let topic = cloudToken + '/+/+';
+              if (client && client.connected) {
+                client.publish(cloudToken + '/connected', "true");
+                console.log("Sent connected event")
+                client.subscribe([`${topic}/read`, `${topic}/write`])
+              }
+              connectBtn.disabled = false;
+          });
         }).catch(error => {
           errors.appendChild(document.createTextNode(error));
         });
       } else {
+        let topic = deviceMapByDeviceId.deviceUri.cloudToken+'/+/+';
         device.gatt.disconnect();
         deviceRow.classList.remove("connected");
         if (client && client.connected) {
@@ -203,8 +211,40 @@ bleBtn.addEventListener('pointerup', function(event) {
         connectBtn.disabled = false;
       }
     };
-  }); 
+  });
 });
+
+function getCloudToken(server) {
+  return new Promise((resolve, reject) => {
+    let configurationServiceUUID = 'ef680100-9b35-4933-9b10-52ffa9740042';
+    let cloudTokenUUID = 'ef680106-9b35-4933-9b10-52ffa9740042';
+
+    function generateToken() {
+      let digits = 10 ^ 7;
+      let randomNumber = Math.trunc(new Date().getTime() * digits + (Math.random() * digits));
+      return randomNumber.toString(36);
+    }
+
+    server.getPrimaryService(configurationServiceUUID).then(service => {
+      return service.getCharacteristic(cloudTokenUUID);
+    }).then(characteristic => {
+      characteristic.readValue().then(dataView => {
+        let decoder = new TextDecoder("utf-8");
+        let token = decoder.decode(dataView.buffer).toString();
+        if (token === "") {
+          token = generateToken();
+          let encoder = new TextEncoder();
+          let encoded = encoder.encode(token);
+          console.log("Assigning cloud token " + token);
+          characteristic.writeValue(encoded);
+        }
+        console.log("Cloud token: " + token);
+        resolve(token);
+      })
+    }).catch(error => reject("Error while getting cloud token" + error));
+  });
+}
+
 
 function getCharacteristics(device){
   var supportedCharacteristics = {}
@@ -234,8 +274,7 @@ function handleCharacteristic(characteristic) {
     characteristic.addEventListener('characteristicvaluechanged', e => {
       const view = e.target.value;
       if (client && client.connected) {
-        const deviceUri = escape(characteristic.service.device.id);
-        client.publish(deviceUri + '/' + characteristic.service.uuid +
+        client.publish(characteristic.service.device.cloudToken + '/' + characteristic.service.uuid +
                                    '/' + characteristic.uuid, Buffer.from(view.buffer));
       }
     });
