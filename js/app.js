@@ -42,7 +42,7 @@ connectForm.addEventListener('submit', e => {
     modalBtn.value = 'Disconnect';
     for (var deviceUri in deviceMap) {
       const topic = deviceUri+'/+/+'
-      client.subscribe([`${topic}/read`, `${topic}/write`])
+      client.subscribe([`${topic}/Get`, `${topic}/Set`])
     }
   });
   client.on('message', onMessage);
@@ -67,10 +67,10 @@ function onMessage(topic, message) {
   device.gatt.getPrimaryService(serviceUUID)
   .then(service => service.getCharacteristic(characteristicUUID))
   .then(characteristic => {
-    if (action == 'write') {
+    if (action == 'Set') {
       return characteristic.writeValue(message);
     }
-    else if (action == 'read')
+    else if (action == 'Get')
       return characteristic.readValue().then(value => {
         if (client.connected)
           client.publish(`${deviceUri}/${serviceUUID}/${characteristicUUID}`, Buffer.from(value.buffer));
@@ -187,7 +187,7 @@ bleBtn.addEventListener('pointerup', function(event) {
           deviceRow.classList.add("connected");
           if (client && client.connected) {
             client.publish(deviceUri + '/connected', "true");
-            client.subscribe([`${topic}/read`, `${topic}/write`])
+            client.subscribe([`${topic}/Get`, `${topic}/Set`])
           }
           connectBtn.disabled = false;
         }).catch(error => {
@@ -198,7 +198,7 @@ bleBtn.addEventListener('pointerup', function(event) {
         deviceRow.classList.remove("connected");
         if (client && client.connected) {
           client.publish(deviceUri + '/connected', "false");
-          client.unsubscribe([`${topic}/read`, `${topic}/write`])
+          client.unsubscribe([`${topic}/Get`, `${topic}/Set`])
         }
         connectBtn.disabled = false;
       }
